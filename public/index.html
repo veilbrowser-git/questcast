@@ -667,35 +667,31 @@
   }, 1000);
 
   // ---------- Ads ----------
-  // One AdSense unit under the code box. It lives on the entry page only, so
-  // it is never on screen while a cast is playing.
+  // One banner under the code box. It lives on the entry page only, so it is
+  // never on screen while a cast is playing.
   (() => {
-    const ads = window.QUESTCAST_ADS || {};
+    const banner = window.QUESTCAST_ADS?.banner;
     const box = $('adEntry');
-    if (ads.client && ads.entrySlot) {
-      const script = document.createElement('script');
-      script.async = true;
-      script.crossOrigin = 'anonymous';
-      script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + encodeURIComponent(ads.client);
-      document.head.appendChild(script);
-
+    if (banner) {
       const label = document.createElement('span');
       label.className = 'ad-label';
       label.textContent = 'Advertisement';
-      const unit = document.createElement('ins');
-      unit.className = 'adsbygoogle';
-      unit.style.display = 'block';
-      unit.dataset.adClient = ads.client;
-      unit.dataset.adSlot = ads.entrySlot;
-      unit.dataset.adFormat = 'auto';
-      unit.dataset.fullWidthResponsive = 'true';
-      box.append(label, unit);
+
+      // The ad network's code (in ad.html) runs in a sandboxed frame: a click can
+      // open the advertiser's site in a new tab, but the code cannot read this
+      // page, see the session code, or send the viewer somewhere else.
+      const frame = document.createElement('iframe');
+      frame.src = 'ad.html';
+      frame.title = 'Advertisement';
+      frame.width = banner.width;
+      frame.height = banner.height;
+      frame.setAttribute('sandbox', 'allow-scripts allow-popups allow-popups-to-escape-sandbox');
+      box.append(label, frame);
       box.hidden = false;
-      (window.adsbygoogle = window.adsbygoogle || []).push({});
     } else if (new URLSearchParams(location.search).get('ads') === 'preview') {
-      // ?ads=preview shows where the ad will sit before an AdSense account exists.
+      // ?ads=preview shows where the banner will sit before a network is set up.
       box.classList.add('ad-placeholder');
-      box.textContent = 'Advertisement — your AdSense ad will appear here';
+      box.textContent = 'Advertisement — your banner will appear here';
       box.hidden = false;
     }
   })();

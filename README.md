@@ -59,11 +59,15 @@ HTTPS and change `HOSTED_RELAY` in `public/config.js`.
 
 ## Ads
 
-The watch page has one ad space under the code box, for Google AdSense. It is
-empty until `QUESTCAST_ADS` in `public/config.js` is filled in with the
-publisher ID and ad-unit slot from an approved AdSense account. Add
-`?ads=preview` to the address to see where it sits. Ads are never shown over
-the video.
+The watch page has one banner space under the code box. It works with any ad
+network that gives you a banner code (it is not tied to Google):
+
+1. Paste the network's banner code into `public/ad.html`.
+2. Set the banner size in `public/config.js`, e.g. `banner: { width: 300, height: 250 }`.
+
+The network's code runs in a sandboxed frame, so it cannot read the page, see
+session codes or redirect viewers. Ads are never shown over the video. Add
+`?ads=preview` to the address to see where the banner sits.
 
 ## Build the headset app
 
