@@ -483,7 +483,11 @@ public class CastService extends Service {
             if (stopped) return;
             stopped = true;
 
-            if (socket != null) socket.close(1000, null);
+            if (socket != null) {
+                // Say goodbye first so viewers see "Cast ended" at once.
+                socket.send("{\"type\":\"leave\"}");
+                socket.close(1000, null);
+            }
             socket = null;
             closePeers();
             try {

@@ -142,7 +142,13 @@
 
   function stop(message) {
     clearInterval(keepalive);
-    if (ws) { const s = ws; ws = null; s.close(); }
+    if (ws) {
+      const s = ws;
+      ws = null;
+      // Say goodbye first so viewers see "Cast ended" at once, not when the socket times out.
+      if (s.readyState === WebSocket.OPEN) s.send('{"type":"leave"}');
+      s.close();
+    }
     for (const pc of peers.values()) pc.close();
     peers.clear();
     stream?.getTracks().forEach((t) => t.stop());
