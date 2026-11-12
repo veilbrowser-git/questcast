@@ -1,0 +1,151 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#0b0d12">
+<title>QuestCast — Share</title>
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<main class="center">
+  <div class="card">
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
+      QuestCast
+    </div>
+
+    <section id="idle">
+      <h1>Share this screen</h1>
+      <p id="idleText">Start a cast, then give the code to whoever should watch.</p>
+      <button class="btn" id="start">Start casting</button>
+      <div class="error" id="error" role="alert"></div>
+      <p class="small">Have a code already? <a href="./">Watch a cast</a></p>
+    </section>
+
+    <section id="live" hidden>
+      <p style="margin-bottom:4px">Session code</p>
+      <div class="big-code" id="code" aria-live="polite">······</div>
+      <p class="small" style="margin:0 0 16px">Enter it at <a id="link" href="./" target="_blank" rel="noopener"></a></p>
+      <span class="pill"><span class="dot live"></span><span id="viewers">Waiting for viewers</span></span>
+      <video class="preview" id="preview" autoplay playsinline muted></video>
+      <button class="btn danger" id="stop">Stop casting</button>
+    </section>
+  </div>
+</main>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+
+  let ws = null, stream = null;
+  const peers = new Map(); // viewerId -> RTCPeerConnection
+
+  if (!navigator.mediaDevices?.getDisplayMedia) {
+    $('start').disabled = true;
+    $('idleText').textContent =
+      "This browser can't share its screen. On a Meta Quest, use the QuestCast headset app instead.";
+  }
+
+  $('start').onclick = async () => {
+    $('error').textContent = '';
+    try {
+      stream = await navigator.mediaDevices.getDisplayMedia({ video: { frameRate: 30 }, audio: true });
+    } catch (err) {
+      if (err.name !== 'NotAllowedError') $('error').textContent = 'Could not start screen sharing.';
+      return;
+    }
+    // The browser's own "Stop sharing" button ends the cast too.
+    // Favor sharp text over smooth motion when bandwidth is tight.
+    stream.getVideoTracks()[0].contentHint = 'detail';
+    stream.getVideoTracks()[0].addEventListener('ended', stop);
+    $('preview').srcObject = stream;
+    connect();
+  };
+
+  $('stop').onclick = stop;
+
+  function connect() {
+    const sock = ws = new WebSocket(questcastSocketUrl());
+    sock.onopen = () => sock.send(JSON.stringify({ type: 'host' }));
+
+    sock.onmessage = async (ev) => {
+      if (sock !== ws) return;
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'hosted') {
+        $('code').textContent = msg.code.slice(0, 3) + ' ' + msg.code.slice(3);
+        const watchUrl = new URL('./', location.href);
+        $('link').textContent = watchUrl.host + watchUrl.pathname.replace(/\/$/, '');
+        $('link').href = watchUrl.href + '#' + msg.code;
+        $('idle').hidden = true;
+        $('live').hidden = false;
+      } else if (msg.type === 'viewer-joined') {
+        await addViewer(msg.viewerId);
+      } else if (msg.type === 'viewer-left') {
+        removeViewer(msg.viewerId);
+      } else if (msg.type === 'signal') {
+        const pc = peers.get(msg.from);
+        if (!pc) return;
+        if (msg.data.sdp) await pc.setRemoteDescription(msg.data.sdp).catch(console.error);
+        else if (msg.data.candidate) await pc.addIceCandidate(msg.data.candidate).catch(() => {});
+      }
+    };
+
+    sock.onclose = () => {
+      if (sock !== ws) return;
+      stop("Lost the connection to the cast server.");
+    };
+  }
+
+  async function addViewer(viewerId) {
+    const pc = new RTCPeerConnection({ iceServers: ICE });
+    peers.set(viewerId, pc);
+    for (const track of stream.getTracks()) pc.addTrack(track, stream);
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate) signal(viewerId, { candidate: e.candidate.toJSON() });
+    };
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === 'failed') removeViewer(viewerId);
+      updateViewers();
+    };
+
+    await pc.setLocalDescription(await pc.createOffer());
+    signal(viewerId, { sdp: { type: 'offer', sdp: pc.localDescription.sdp } });
+    updateViewers();
+  }
+
+  function removeViewer(viewerId) {
+    peers.get(viewerId)?.close();
+    peers.delete(viewerId);
+    updateViewers();
+  }
+
+  function signal(to, data) {
+    if (ws?.readyState === WebSocket.OPEN) ws.send(JSON.stringify({ type: 'signal', to, data }));
+  }
+
+  function updateViewers() {
+    const n = [...peers.values()].filter((pc) => pc.connectionState === 'connected').length;
+    $('viewers').textContent = n === 0 ? 'Waiting for viewers' : n === 1 ? '1 person watching' : `${n} people watching`;
+  }
+
+  function stop(message) {
+    if (ws) { const s = ws; ws = null; s.close(); }
+    for (const pc of peers.values()) pc.close();
+    peers.clear();
+    stream?.getTracks().forEach((t) => t.stop());
+    stream = null;
+    $('preview').srcObject = null;
+    $('live').hidden = true;
+    $('idle').hidden = false;
+    $('error').textContent = typeof message === 'string' ? message : '';
+    updateViewers();
+  }
+})();
+</script>
+</body>
+</html>

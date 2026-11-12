@@ -1,0 +1,39 @@
+plugins {
+    id 'com.android.application'
+}
+
+// Pre-fill the server address in the headset so nobody has to type it in VR:
+//   gradle assembleDebug -PdefaultServer=192.168.1.20:8787
+def defaultServer = (project.findProperty('defaultServer') ?: '').toString()
+
+android {
+    namespace 'app.questcast'
+    compileSdk 36
+
+    defaultConfig {
+        applicationId 'app.questcast'
+        minSdk 29
+        targetSdk 34
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'DEFAULT_SERVER', "\"${defaultServer}\""
+        ndk {
+            // Every Quest is 64-bit ARM; skipping other ABIs keeps the APK small.
+            abiFilters 'arm64-v8a'
+        }
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'io.github.webrtc-sdk:android:150.7871.04'
+    implementation 'com.squareup.okhttp3:okhttp:4.12.0'
+}

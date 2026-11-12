@@ -1,0 +1,13 @@
+{
+  "name": "questcast",
+  "version": "1.0.0",
+  "description": "Cast a Meta Quest to any device with a session code",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "ws": "^8.18.0"
+  }
+}

@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, user-scalable=no">
+<meta name="theme-color" content="#0b0d12">
+<title>QuestCast — Watch</title>
+<link rel="stylesheet" href="style.css">
+<style>
+  #stage {
+    position: fixed;
+    inset: 0;
+    background: #000;
+    overflow: hidden;
+    touch-action: none;
+    user-select: none;
+    -webkit-user-select: none;
+    cursor: default;
+  }
+  #stage.zoomed { cursor: grab; }
+  #stage.dragging { cursor: grabbing; }
+  #stage.idle { cursor: none; }
+
+  #video {
+    position: absolute;
+    inset: 0;
+    width: 100%;
+    height: 100%;
+    object-fit: contain;
+    transform-origin: 0 0;
+    will-change: transform;
+    pointer-events: none;
+  }
+  #stage.fill #video { object-fit: cover; }
+
+  #overlay {
+    position: absolute;
+    inset: 0;
+    display: grid;
+    place-items: center;
+    padding: 24px;
+    text-align: center;
+    background: rgba(0, 0, 0, 0.72);
+  }
+  #overlay .box { max-width: 360px; }
+  #overlay h2 { margin: 14px 0 6px; font-size: 20px; }
+  #overlay p { margin: 0; }
+  #overlay .btn { width: auto; padding: 12px 22px; margin-top: 18px; }
+
+  .spinner {
+    width: 34px; height: 34px; margin: 0 auto;
+    border: 3px solid rgba(255, 255, 255, 0.18);
+    border-top-color: var(--accent);
+    border-radius: 50%;
+    animation: spin 0.9s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+
+  #bar {
+    position: absolute;
+    left: 50%;
+    bottom: calc(18px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    gap: 4px;
+    padding: 6px;
+    background: rgba(21, 25, 34, 0.86);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+    transition: opacity 0.25s, transform 0.25s;
+  }
+  #stage.idle #bar { opacity: 0; transform: translateX(-50%) translateY(10px); pointer-events: none; }
+
+  #bar button {
+    display: grid;
+    place-items: center;
+    min-width: 42px;
+    height: 42px;
+    padding: 0 8px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+    color: var(--text);
+    background: transparent;
+    border: 0;
+    border-radius: 10px;
+    cursor: pointer;
+  }
+  #bar button:hover { background: rgba(255, 255, 255, 0.1); }
+  #bar button:disabled { opacity: 0.35; cursor: default; background: transparent; }
+  #bar button.on { color: var(--accent); }
+  #bar .sep { width: 1px; height: 24px; margin: 0 4px; background: rgba(255, 255, 255, 0.14); }
+  #zoomLabel { min-width: 58px; }
+  #leave { color: var(--danger); }
+
+  #badge {
+    position: absolute;
+    top: calc(14px + env(safe-area-inset-top));
+    left: 14px;
+    background: rgba(21, 25, 34, 0.8);
+    transition: opacity 0.25s;
+  }
+  #stage.idle #badge { opacity: 0; }
+</style>
+</head>
+<body>
+
+<main id="enter" class="center">
+  <form class="card" id="joinForm" autocomplete="off" novalidate>
+    <div class="brand">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M2 16.1A5 5 0 0 1 5.9 20M2 12.05A9 9 0 0 1 9.95 20M2 8V6a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2h-6"/><line x1="2" y1="20" x2="2.01" y2="20"/></svg>
+      QuestCast
+    </div>
+    <h1>Watch a headset</h1>
+    <p>Enter the 6-digit code shown in the headset.</p>
+    <input id="code" class="code-input" inputmode="numeric" maxlength="7"
+           placeholder="000000" aria-label="Session code" autofocus>
+    <button class="btn" id="joinBtn" type="submit" disabled>Watch</button>
+    <div class="error" id="joinError" role="alert"></div>
+    <p class="small">Want to share a screen instead? <a href="cast.html">Start a cast</a></p>
+  </form>
+</main>
+
+<div id="stage" hidden>
+  <video id="video" autoplay playsinline muted></video>
+
+  <div class="pill" id="badge"><span class="dot live"></span><span id="badgeText">Live</span></div>
+
+  <div id="overlay">
+    <div class="box">
+      <div class="spinner" id="spinner"></div>
+      <h2 id="overlayTitle">Connecting…</h2>
+      <p id="overlayText">Waiting for the headset.</p>
+      <button class="btn" id="overlayBtn" hidden>Back</button>
+    </div>
+  </div>
+
+  <div id="bar" role="toolbar" aria-label="View controls">
+    <button id="zoomOut" title="Zoom out (−)" aria-label="Zoom out">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <button id="zoomLabel" title="Reset zoom (0)" aria-label="Reset zoom">100%</button>
+    <button id="zoomIn" title="Zoom in (+)" aria-label="Zoom in">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+    </button>
+    <span class="sep"></span>
+    <button id="fillBtn" title="Fill the screen" aria-label="Fill the screen" aria-pressed="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="5" width="18" height="14" rx="2"/><path d="M8 12h8M8 12l2.5-2.5M8 12l2.5 2.5M16 12l-2.5-2.5M16 12l-2.5 2.5"/></svg>
+    </button>
+    <button id="muteBtn" title="Sound" aria-label="Toggle sound" hidden>
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M11 5 6 9H3v6h3l5 4z"/><path id="muteWaves" d="M22 9l-6 6M16 9l6 6"/></svg>
+    </button>
+    <button id="fsBtn" title="Full screen (F)" aria-label="Full screen">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <span class="sep"></span>
+    <button id="leave" title="Stop watching" aria-label="Stop watching">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="6" y1="6" x2="18" y2="18"/><line x1="18" y1="6" x2="6" y2="18"/></svg>
+    </button>
+  </div>
+</div>
+
+<script src="config.js"></script>
+<script>
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const enter = $('enter'), stage = $('stage'), video = $('video');
+  const codeInput = $('code'), joinBtn = $('joinBtn'), joinError = $('joinError');
+  const overlay = $('overlay'), spinner = $('spinner');
+  const overlayTitle = $('overlayTitle'), overlayText = $('overlayText'), overlayBtn = $('overlayBtn');
+
+  const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
+  const MIN_ZOOM = 1, MAX_ZOOM = 8;
+
+  let ws = null, pc = null, code = '';
+  let pendingCandidates = [];
+  let signalQueue = Promise.resolve();
+
+  // ---------- Code entry ----------
+
+  const digits = (s) => s.replace(/\D/g, '').slice(0, 6);
+
+  codeInput.addEventListener('input', () => {
+    const d = digits(codeInput.value);
+    codeInput.value = d.length > 3 ? d.slice(0, 3) + ' ' + d.slice(3) : d;
+    joinBtn.disabled = d.length !== 6;
+    joinError.textContent = '';
+  });
+
+  $('joinForm').addEventListener('submit', (e) => {
+    e.preventDefault();
+    const d = digits(codeInput.value);
+    if (d.length === 6) join(d);
+  });
+
+  // ---------- Session ----------
+
+  function showOverlay(title, text, { busy = false, button = null } = {}) {
+    overlay.hidden = false;
+    spinner.hidden = !busy;
+    overlayTitle.textContent = title;
+    overlayText.textContent = text;
+    overlayBtn.hidden = !button;
+    if (button) {
+      overlayBtn.textContent = button.label;
+      overlayBtn.onclick = button.action;
+    }
+    wake();
+  }
+
+  function join(newCode) {
+    code = newCode;
+    cleanup();
+    joinBtn.disabled = true;
+    joinError.textContent = '';
+
+    const sock = ws = new WebSocket(questcastSocketUrl());
+    let joined = false;
+
+    sock.onopen = () => sock.send(JSON.stringify({ type: 'join', code }));
+
+    sock.onmessage = (ev) => {
+      if (sock !== ws) return;
+      const msg = JSON.parse(ev.data);
+      if (msg.type === 'joined') {
+        joined = true;
+        history.replaceState(null, '', '#' + code);
+        enter.hidden = true;
+        stage.hidden = false;
+        resetView();
+        showOverlay('Connecting…', 'Waiting for the headset.', { busy: true });
+      } else if (msg.type === 'error') {
+        backToEntry(msg.message);
+      } else if (msg.type === 'signal') {
+        signalQueue = signalQueue.then(() => onSignal(msg.data)).catch(console.error);
+      } else if (msg.type === 'ended') {
+        cleanup();
+        showOverlay('Cast ended', 'The headset stopped sharing.', {
+          button: { label: 'Enter another code', action: () => backToEntry('') },
+        });
+      }
+    };
+
+    sock.onclose = () => {
+      if (sock !== ws) return;
+      ws = null;
+      if (!joined) {
+        backToEntry(questcastNeedsServer()
+          ? "This site isn't connected to a cast relay yet. Set one in config.js."
+          : "Can't reach the cast server. Check your connection.");
+      } else if (pc && pc.connectionState !== 'connected') {
+        lost();
+      }
+      // If video is already flowing peer to peer, it keeps playing without the server.
+    };
+  }
+
+  function lost() {
+    cleanup();
+    showOverlay('Connection lost', 'The cast dropped. It may still be running.', {
+      button: { label: 'Reconnect', action: () => join(code) },
+    });
+  }
+
+  function backToEntry(message) {
+    cleanup();
+    if (document.fullscreenElement) document.exitFullscreen?.();
+    history.replaceState(null, '', location.pathname + location.search);
+    stage.hidden = true;
+    enter.hidden = false;
+    joinError.textContent = message || '';
+    joinBtn.disabled = digits(codeInput.value).length !== 6;
+    codeInput.focus();
+    codeInput.select();
+  }
+
+  function cleanup() {
+    if (ws) { const s = ws; ws = null; try { s.send(JSON.stringify({ type: 'leave' })); } catch {} s.close(); }
+    if (pc) { pc.ontrack = pc.onicecandidate = pc.onconnectionstatechange = null; pc.close(); pc = null; }
+    pendingCandidates = [];
+    signalQueue = Promise.resolve();
+    video.srcObject = null;
+    $('muteBtn').hidden = true;
+  }
+
+  function createPeer() {
+    pc = new RTCPeerConnection({ iceServers: ICE });
+
+    pc.ontrack = (e) => {
+      const stream = e.streams[0] || new MediaStream([e.track]);
+      if (video.srcObject !== stream) video.srcObject = stream;
+      if (e.track.kind === 'audio') { $('muteBtn').hidden = false; updateMute(); }
+      video.play().catch(() => {});
+    };
+
+    pc.onicecandidate = (e) => {
+      if (e.candidate && ws) ws.send(JSON.stringify({ type: 'signal', data: { candidate: e.candidate.toJSON() } }));
+    };
+
+    pc.onconnectionstatechange = () => {
+      const s = pc.connectionState;
+      if (s === 'connected') overlay.hidden = true;
+      else if (s === 'disconnected') showOverlay('Reconnecting…', 'The connection is unstable.', { busy: true });
+      else if (s === 'failed') lost();
+    };
+  }
+
+  async function onSignal(data) {
+    if (data.sdp) {
+      if (data.sdp.type === 'offer') {
+        if (pc) { pc.close(); pendingCandidates = []; }
+        createPeer();
+        await pc.setRemoteDescription(data.sdp);
+        for (const c of pendingCandidates.splice(0)) await pc.addIceCandidate(c).catch(() => {});
+        await pc.setLocalDescription(await pc.createAnswer());
+        ws?.send(JSON.stringify({ type: 'signal', data: { sdp: { type: 'answer', sdp: pc.localDescription.sdp } } }));
+      }
+    } else if (data.candidate) {
+      if (pc?.remoteDescription) await pc.addIceCandidate(data.candidate).catch(() => {});
+      else pendingCandidates.push(data.candidate);
+    }
+  }
+
+  // ---------- Zoom & pan ----------
+
+  const view = { scale: 1, x: 0, y: 0 };
+  const zoomLabel = $('zoomLabel');
+
+  function applyView() {
+    const w = stage.clientWidth, h = stage.clientHeight;
+    view.scale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, view.scale));
+    view.x = Math.min(0, Math.max(w * (1 - view.scale), view.x));
+    view.y = Math.min(0, Math.max(h * (1 - view.scale), view.y));
+    video.style.transform = `translate(${view.x}px, ${view.y}px) scale(${view.scale})`;
+    zoomLabel.textContent = Math.round(view.scale * 100) + '%';
+    stage.classList.toggle('zoomed', view.scale > 1.001);
+    $('zoomOut').disabled = view.scale <= MIN_ZOOM + 0.001;
+    $('zoomIn').disabled = view.scale >= MAX_ZOOM - 0.001;
+  }
+
+  // Zoom so the point (px, py) of the stage stays under the cursor/fingers.
+  function zoomAt(px, py, newScale) {
+    newScale = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, newScale));
+    const k = newScale / view.scale;
+    view.x = px - (px - view.x) * k;
+    view.y = py - (py - view.y) * k;
+    view.scale = newScale;
+    applyView();
+  }
+
+  const zoomCenter = (factor) => zoomAt(stage.clientWidth / 2, stage.clientHeight / 2, view.scale * factor);
+
+  function resetView() {
+    view.scale = 1; view.x = 0; view.y = 0;
+    applyView();
+  }
+
+  stage.addEventListener('wheel', (e) => {
+    e.preventDefault();
+    const r = stage.getBoundingClientRect();
+    // ctrlKey marks a trackpad pinch, which reports much smaller deltas.
+    const speed = e.ctrlKey ? 0.012 : 0.0018;
+    const delta = e.deltaMode === 1 ? e.deltaY * 16 : e.deltaY;
+    zoomAt(e.clientX - r.left, e.clientY - r.top, view.scale * Math.exp(-delta * speed));
+  }, { passive: false });
+
+  const pointers = new Map();
+  let pinch = null, lastTap = 0, moved = false;
+
+  stage.addEventListener('pointerdown', (e) => {
+    if (e.target.closest('#bar, #overlay')) return;
+    stage.setPointerCapture(e.pointerId);
+    pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    moved = false;
+    if (pointers.size === 2) pinch = pinchState();
+    stage.classList.add('dragging');
+  });
+
+  stage.addEventListener('pointermove', (e) => {
+    wake();
+    const p = pointers.get(e.pointerId);
+    if (!p) return;
+    const dx = e.clientX - p.x, dy = e.clientY - p.y;
+    p.x = e.clientX; p.y = e.clientY;
+    if (Math.abs(dx) + Math.abs(dy) > 2) moved = true;
+
+    if (pointers.size === 1) {
+      view.x += dx; view.y += dy;
+      applyView();
+    } else if (pointers.size === 2 && pinch) {
+      const now = pinchState();
+      const r = stage.getBoundingClientRect();
+      view.x += now.cx - pinch.cx;
+      view.y += now.cy - pinch.cy;
+      zoomAt(now.cx - r.left, now.cy - r.top, view.scale * (now.dist / pinch.dist));
+      pinch = now;
+    }
+  });
+
+  function pointerEnd(e) {
+    if (!pointers.delete(e.pointerId)) return;
+    pinch = null;
+    if (pointers.size === 0) {
+      stage.classList.remove('dragging');
+      if (!moved && e.type === 'pointerup') {
+        const now = performance.now();
+        if (now - lastTap < 320) {
+          const r = stage.getBoundingClientRect();
+          if (view.scale > 1.001) resetView();
+          else zoomAt(e.clientX - r.left, e.clientY - r.top, 2.5);
+          lastTap = 0;
+        } else {
+          lastTap = now;
+        }
+      }
+    }
+  }
+  stage.addEventListener('pointerup', pointerEnd);
+  stage.addEventListener('pointercancel', pointerEnd);
+
+  function pinchState() {
+    const [a, b] = [...pointers.values()];
+    return { dist: Math.max(1, Math.hypot(a.x - b.x, a.y - b.y)), cx: (a.x + b.x) / 2, cy: (a.y + b.y) / 2 };
+  }
+
+  window.addEventListener('resize', applyView);
+
+  // ---------- Toolbar ----------
+
+  $('zoomIn').onclick = () => zoomCenter(1.5);
+  $('zoomOut').onclick = () => zoomCenter(1 / 1.5);
+  zoomLabel.onclick = resetView;
+
+  const fillBtn = $('fillBtn');
+  fillBtn.onclick = () => {
+    const on = stage.classList.toggle('fill');
+    fillBtn.classList.toggle('on', on);
+    fillBtn.setAttribute('aria-pressed', on);
+  };
+
+  function updateMute() {
+    $('muteBtn').classList.toggle('on', !video.muted);
+    $('muteWaves').setAttribute('d', video.muted ? 'M22 9l-6 6M16 9l6 6' : 'M15.5 8.5a5 5 0 0 1 0 7M18.5 5.5a9 9 0 0 1 0 13');
+  }
+  $('muteBtn').onclick = () => { video.muted = !video.muted; updateMute(); };
+
+  function toggleFullscreen() {
+    const fsEl = document.fullscreenElement || document.webkitFullscreenElement;
+    if (fsEl) return (document.exitFullscreen || document.webkitExitFullscreen).call(document);
+    const req = stage.requestFullscreen || stage.webkitRequestFullscreen;
+    if (req) {
+      Promise.resolve(req.call(stage)).catch(() => video.webkitEnterFullscreen?.());
+    } else {
+      // iPhone only allows the video element itself to go full screen.
+      video.webkitEnterFullscreen?.();
+    }
+  }
+  $('fsBtn').onclick = toggleFullscreen;
+  document.addEventListener('fullscreenchange', () => $('fsBtn').classList.toggle('on', !!document.fullscreenElement));
+
+  $('leave').onclick = () => backToEntry('');
+
+  document.addEventListener('keydown', (e) => {
+    if (stage.hidden || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === '+' || e.key === '=') zoomCenter(1.5);
+    else if (e.key === '-' || e.key === '_') zoomCenter(1 / 1.5);
+    else if (e.key === '0') resetView();
+    else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    else return;
+    wake();
+  });
+
+  // Hide the controls when the pointer rests, so nothing covers the picture.
+  let idleTimer = 0;
+  function wake() {
+    stage.classList.remove('idle');
+    clearTimeout(idleTimer);
+    idleTimer = setTimeout(() => {
+      if (overlay.hidden && !$('bar').matches(':hover')) stage.classList.add('idle');
+    }, 3000);
+  }
+  stage.addEventListener('pointerdown', wake);
+
+  video.addEventListener('resize', () => {
+    if (video.videoWidth) $('badgeText').textContent = `Live · ${video.videoWidth}×${video.videoHeight}`;
+  });
+
+  // A link like /#123456 joins straight away.
+  const fromHash = digits(location.hash);
+  if (fromHash.length === 6) {
+    codeInput.value = fromHash.slice(0, 3) + ' ' + fromHash.slice(3);
+    join(fromHash);
+  }
+})();
+</script>
+</body>
+</html>
