@@ -31,6 +31,12 @@ public class MainActivity extends Activity implements CastService.Listener {
         super.onCreate(savedInstanceState);
         setContentView(R.layout.activity_main);
 
+        // Keep the card readable on a wide panel without clipping it on a narrow one.
+        View card = findViewById(R.id.card);
+        float density = getResources().getDisplayMetrics().density;
+        int available = getResources().getDisplayMetrics().widthPixels - Math.round(48 * density);
+        card.getLayoutParams().width = Math.min(Math.round(520 * density), available);
+
         prefs = getPreferences(MODE_PRIVATE);
         idleGroup = findViewById(R.id.idleGroup);
         liveGroup = findViewById(R.id.liveGroup);

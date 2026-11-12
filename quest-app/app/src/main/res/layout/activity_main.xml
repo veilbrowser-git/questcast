@@ -9,8 +9,10 @@
         android:layout_height="wrap_content"
         android:padding="24dp">
 
+        <!-- Width is capped in MainActivity so the card also fits narrow panels. -->
         <LinearLayout
-            android:layout_width="520dp"
+            android:id="@+id/card"
+            android:layout_width="match_parent"
             android:layout_height="wrap_content"
             android:layout_gravity="center"
             android:background="@drawable/card"
