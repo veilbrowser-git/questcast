@@ -36,7 +36,9 @@ address on any device on the same Wi-Fi.
 ## Watching
 
 - Scroll or pinch to zoom, drag to pan, double-tap to zoom in and back out.
-- Toolbar: zoom, fill the screen, full screen. Keys: `+` `-` `0` `F`.
+- Toolbar: zoom, fill the screen, full screen, settings. Keys: `+` `-` `0` `F`.
+- Settings: lower the frame rate (30/20/15/10 FPS) or picture quality for your own view, e.g. on a slow connection. The choice is remembered. The badge in the corner shows the resolution and FPS actually arriving.
+- The headset app has its own frame-rate choice (30/20/15 FPS), which caps every viewer and is lighter on the headset.
 - A link like `https://your-site/#123456` joins directly.
 
 ## Using it away from home

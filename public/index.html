@@ -98,6 +98,61 @@
   #zoomLabel { min-width: 58px; }
   #leave { color: var(--danger); }
 
+  #settings {
+    position: absolute;
+    left: 50%;
+    bottom: calc(84px + env(safe-area-inset-bottom));
+    transform: translateX(-50%);
+    width: min(340px, calc(100% - 24px));
+    padding: 16px;
+    background: rgba(21, 25, 34, 0.95);
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 14px;
+    backdrop-filter: blur(14px);
+    -webkit-backdrop-filter: blur(14px);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+  }
+  #settings .row + .row { margin-top: 14px; }
+  #settings .label { display: block; margin-bottom: 6px; font-size: 13px; color: var(--muted); }
+  #settings .hint { margin: 10px 0 0; font-size: 12.5px; line-height: 1.4; color: var(--muted); }
+  .seg {
+    display: grid;
+    grid-auto-flow: column;
+    grid-auto-columns: 1fr;
+    gap: 4px;
+    padding: 4px;
+    background: var(--bg);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  .seg button, #fsRow {
+    height: 36px;
+    font: inherit;
+    font-size: 14px;
+    font-weight: 600;
+    color: var(--muted);
+    background: transparent;
+    border: 0;
+    border-radius: 7px;
+    cursor: pointer;
+  }
+  .seg button:hover { color: var(--text); }
+  .seg button[aria-checked="true"] { color: var(--accent-ink); background: var(--accent); }
+  #fsRow {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    width: 100%;
+    height: 42px;
+    margin-top: 14px;
+    color: var(--text);
+    background: var(--panel-2);
+    border: 1px solid var(--line);
+    border-radius: 10px;
+  }
+  #fsRow:hover { background: #262d3e; }
+
   #badge {
     position: absolute;
     top: calc(14px + env(safe-area-inset-top));
@@ -140,6 +195,31 @@
     </div>
   </div>
 
+  <div id="settings" role="dialog" aria-label="Settings" hidden>
+    <div class="row">
+      <span class="label" id="fpsLabel">Frame rate (FPS)</span>
+      <div class="seg" id="fpsSeg" role="radiogroup" aria-labelledby="fpsLabel">
+        <button role="radio" data-value="30">30</button>
+        <button role="radio" data-value="20">20</button>
+        <button role="radio" data-value="15">15</button>
+        <button role="radio" data-value="10">10</button>
+      </div>
+    </div>
+    <div class="row">
+      <span class="label" id="qualityLabel">Picture quality</span>
+      <div class="seg" id="qualitySeg" role="radiogroup" aria-labelledby="qualityLabel">
+        <button role="radio" data-value="1">High</button>
+        <button role="radio" data-value="1.5">Medium</button>
+        <button role="radio" data-value="2.5">Low</button>
+      </div>
+    </div>
+    <p class="hint">Lower settings use less data and stay smoother on a slow connection. They only change your view.</p>
+    <button id="fsRow">
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+      <span id="fsRowText">Full screen</span>
+    </button>
+  </div>
+
   <div id="bar" role="toolbar" aria-label="View controls">
     <button id="zoomOut" title="Zoom out (−)" aria-label="Zoom out">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><line x1="5" y1="12" x2="19" y2="12"/></svg>
@@ -157,6 +237,9 @@
     </button>
     <button id="fsBtn" title="Full screen (F)" aria-label="Full screen">
       <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>
+    </button>
+    <button id="settingsBtn" title="Settings" aria-label="Settings" aria-expanded="false">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="4" y1="7" x2="20" y2="7"/><line x1="4" y1="17" x2="20" y2="17"/><circle cx="9" cy="7" r="2.5" fill="#151922"/><circle cx="15" cy="17" r="2.5" fill="#151922"/></svg>
     </button>
     <span class="sep"></span>
     <button id="leave" title="Stop watching" aria-label="Stop watching">
@@ -304,6 +387,7 @@
     signalQueue = Promise.resolve();
     video.srcObject = null;
     $('muteBtn').hidden = true;
+    closeSettings();
   }
 
   function createPeer() {
@@ -322,7 +406,7 @@
 
     pc.onconnectionstatechange = () => {
       const s = pc.connectionState;
-      if (s === 'connected') overlay.hidden = true;
+      if (s === 'connected') { overlay.hidden = true; sendSettings(); }
       else if (s === 'disconnected') showOverlay('Reconnecting…', 'The connection is unstable.', { busy: true });
       else if (s === 'failed') lost();
     };
@@ -391,7 +475,8 @@
   let pinch = null, lastTap = 0, moved = false;
 
   stage.addEventListener('pointerdown', (e) => {
-    if (e.target.closest('#bar, #overlay')) return;
+    if (e.target.closest('#bar, #overlay, #settings')) return;
+    closeSettings();
     stage.setPointerCapture(e.pointerId);
     pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
     moved = false;
@@ -478,8 +563,61 @@
       video.webkitEnterFullscreen?.();
     }
   }
+  function onFullscreenChange() {
+    const on = !!(document.fullscreenElement || document.webkitFullscreenElement);
+    $('fsBtn').classList.toggle('on', on);
+    $('fsRowText').textContent = on ? 'Exit full screen' : 'Full screen';
+  }
   $('fsBtn').onclick = toggleFullscreen;
-  document.addEventListener('fullscreenchange', () => $('fsBtn').classList.toggle('on', !!document.fullscreenElement));
+  $('fsRow').onclick = () => { toggleFullscreen(); closeSettings(); };
+  document.addEventListener('fullscreenchange', onFullscreenChange);
+  document.addEventListener('webkitfullscreenchange', onFullscreenChange);
+
+  // ---------- Settings ----------
+  // Frame rate and picture quality are requests to the sender, which lowers
+  // what it encodes for this viewer only.
+
+  const SETTINGS_KEY = 'questcast.settings';
+  const settings = { fps: 30, scale: 1 };
+  try { Object.assign(settings, JSON.parse(localStorage.getItem(SETTINGS_KEY)) || {}); } catch {}
+
+  function sendSettings() {
+    if (ws?.readyState === WebSocket.OPEN && pc?.connectionState === 'connected') {
+      ws.send(JSON.stringify({ type: 'signal', data: { settings } }));
+    }
+  }
+
+  function renderSettings() {
+    for (const b of $('fpsSeg').children) b.setAttribute('aria-checked', Number(b.dataset.value) === settings.fps);
+    for (const b of $('qualitySeg').children) b.setAttribute('aria-checked', Number(b.dataset.value) === settings.scale);
+  }
+
+  function bindSegment(seg, key) {
+    seg.addEventListener('click', (e) => {
+      const b = e.target.closest('button');
+      if (!b) return;
+      settings[key] = Number(b.dataset.value);
+      try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings)); } catch {}
+      renderSettings();
+      sendSettings();
+    });
+  }
+  bindSegment($('fpsSeg'), 'fps');
+  bindSegment($('qualitySeg'), 'scale');
+  renderSettings();
+
+  const settingsPanel = $('settings'), settingsBtn = $('settingsBtn');
+  function closeSettings() {
+    settingsPanel.hidden = true;
+    settingsBtn.classList.remove('on');
+    settingsBtn.setAttribute('aria-expanded', 'false');
+  }
+  settingsBtn.onclick = () => {
+    const open = settingsPanel.hidden;
+    settingsPanel.hidden = !open;
+    settingsBtn.classList.toggle('on', open);
+    settingsBtn.setAttribute('aria-expanded', open);
+  };
 
   $('leave').onclick = () => backToEntry('');
 
@@ -489,6 +627,7 @@
     else if (e.key === '-' || e.key === '_') zoomCenter(1 / 1.5);
     else if (e.key === '0') resetView();
     else if (e.key === 'f' || e.key === 'F') toggleFullscreen();
+    else if (e.key === 'Escape') closeSettings();
     else return;
     wake();
   });
@@ -499,14 +638,32 @@
     stage.classList.remove('idle');
     clearTimeout(idleTimer);
     idleTimer = setTimeout(() => {
-      if (overlay.hidden && !$('bar').matches(':hover')) stage.classList.add('idle');
+      if (overlay.hidden && settingsPanel.hidden && !$('bar').matches(':hover')) stage.classList.add('idle');
     }, 3000);
   }
   stage.addEventListener('pointerdown', wake);
 
-  video.addEventListener('resize', () => {
-    if (video.videoWidth) $('badgeText').textContent = `Live · ${video.videoWidth}×${video.videoHeight}`;
-  });
+  // Badge: what is actually arriving, so a settings change is visible.
+  let fps = 0, lastFrames = null;
+  function updateBadge() {
+    if (!video.videoWidth) return;
+    $('badgeText').textContent = `Live · ${video.videoWidth}×${video.videoHeight}` + (fps ? ` · ${fps} fps` : '');
+  }
+  video.addEventListener('resize', updateBadge);
+  setInterval(async () => {
+    if (pc?.connectionState !== 'connected') { fps = 0; lastFrames = null; return; }
+    const stats = await pc.getStats().catch(() => null);
+    if (!stats) return;
+    for (const r of stats.values()) {
+      if (r.type !== 'inbound-rtp' || r.kind !== 'video') continue;
+      if (lastFrames) {
+        const seconds = (r.timestamp - lastFrames.at) / 1000;
+        if (seconds > 0) fps = Math.round((r.framesDecoded - lastFrames.count) / seconds);
+      }
+      lastFrames = { count: r.framesDecoded, at: r.timestamp };
+    }
+    updateBadge();
+  }, 1000);
 
   // A link like /#123456 joins straight away.
   function joinFromHash() {

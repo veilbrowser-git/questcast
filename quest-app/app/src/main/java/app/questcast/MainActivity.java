@@ -15,11 +15,12 @@ public class MainActivity extends Activity implements CastService.Listener {
     private static final int REQUEST_CAPTURE = 1;
     private static final String PREF_SERVER = "server";
     private static final String PREF_HEIGHT = "height";
+    private static final String PREF_FPS = "fps";
 
     private SharedPreferences prefs;
     private View idleGroup, liveGroup;
     private EditText serverField;
-    private RadioGroup quality;
+    private RadioGroup quality, frameRate;
     private TextView codeText, whereText, viewersText, messageText;
 
     /** Set between tapping Start and the system consent dialog answering. */
@@ -35,6 +36,7 @@ public class MainActivity extends Activity implements CastService.Listener {
         liveGroup = findViewById(R.id.liveGroup);
         serverField = findViewById(R.id.server);
         quality = findViewById(R.id.quality);
+        frameRate = findViewById(R.id.frameRate);
         codeText = findViewById(R.id.code);
         whereText = findViewById(R.id.where);
         viewersText = findViewById(R.id.viewers);
@@ -42,6 +44,8 @@ public class MainActivity extends Activity implements CastService.Listener {
 
         serverField.setText(prefs.getString(PREF_SERVER, BuildConfig.DEFAULT_SERVER));
         quality.check(prefs.getInt(PREF_HEIGHT, 720) == 1080 ? R.id.q1080 : R.id.q720);
+        int savedFps = prefs.getInt(PREF_FPS, 30);
+        frameRate.check(savedFps == 15 ? R.id.fps15 : savedFps == 20 ? R.id.fps20 : R.id.fps30);
 
         findViewById(R.id.start).setOnClickListener(v -> onStartClicked());
         findViewById(R.id.stop).setOnClickListener(v ->
@@ -80,6 +84,7 @@ public class MainActivity extends Activity implements CastService.Listener {
         prefs.edit()
                 .putString(PREF_SERVER, serverField.getText().toString().trim())
                 .putInt(PREF_HEIGHT, selectedHeight())
+                .putInt(PREF_FPS, selectedFps())
                 .apply();
 
         // The system asks the wearer to allow sharing what they see.
@@ -89,6 +94,11 @@ public class MainActivity extends Activity implements CastService.Listener {
 
     private int selectedHeight() {
         return quality.getCheckedRadioButtonId() == R.id.q1080 ? 1080 : 720;
+    }
+
+    private int selectedFps() {
+        int id = frameRate.getCheckedRadioButtonId();
+        return id == R.id.fps15 ? 15 : id == R.id.fps20 ? 20 : 30;
     }
 
     @Override
@@ -103,7 +113,8 @@ public class MainActivity extends Activity implements CastService.Listener {
                 .setAction(CastService.ACTION_START)
                 .putExtra(CastService.EXTRA_RESULT_DATA, data)
                 .putExtra(CastService.EXTRA_SERVER, pendingServer)
-                .putExtra(CastService.EXTRA_HEIGHT, selectedHeight());
+                .putExtra(CastService.EXTRA_HEIGHT, selectedHeight())
+                .putExtra(CastService.EXTRA_FPS, selectedFps());
         pendingServer = null;
         startForegroundService(start);
     }

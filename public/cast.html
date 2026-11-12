@@ -98,6 +98,7 @@
         if (!pc) return;
         if (msg.data.sdp) await pc.setRemoteDescription(msg.data.sdp).catch(console.error);
         else if (msg.data.candidate) await pc.addIceCandidate(msg.data.candidate).catch(() => {});
+        else if (msg.data.settings) applySettings(pc, msg.data.settings);
       }
     };
 
@@ -123,6 +124,21 @@
     await pc.setLocalDescription(await pc.createOffer());
     signal(viewerId, { sdp: { type: 'offer', sdp: pc.localDescription.sdp } });
     updateViewers();
+  }
+
+  // A viewer asked for a lower frame rate or resolution; change only their stream.
+  function applySettings(pc, wanted) {
+    const clamp = (v, lo, hi, fallback) => (Number.isFinite(+v) ? Math.min(hi, Math.max(lo, +v)) : fallback);
+    const fps = clamp(wanted.fps, 5, 30, 30);
+    const scale = clamp(wanted.scale, 1, 4, 1);
+    for (const sender of pc.getSenders()) {
+      if (sender.track?.kind !== 'video') continue;
+      const params = sender.getParameters();
+      if (!params.encodings?.length) continue;
+      params.encodings[0].maxFramerate = fps;
+      params.encodings[0].scaleResolutionDownBy = scale;
+      sender.setParameters(params).catch(() => {});
+    }
   }
 
   function removeViewer(viewerId) {

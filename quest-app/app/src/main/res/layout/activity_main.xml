@@ -80,11 +80,19 @@
                     android:textColorHint="#4A5368"
                     android:textSize="18sp" />
 
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="16dp"
+                    android:text="Picture"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp" />
+
                 <RadioGroup
                     android:id="@+id/quality"
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_marginTop="14dp"
+                    android:layout_marginTop="2dp"
                     android:orientation="horizontal">
 
                     <RadioButton
@@ -102,6 +110,47 @@
                         android:layout_height="wrap_content"
                         android:layout_weight="1"
                         android:text="1080p (sharper)"
+                        android:textColor="@color/text" />
+                </RadioGroup>
+
+                <TextView
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="12dp"
+                    android:text="Frame rate (lower is lighter on the headset)"
+                    android:textColor="@color/muted"
+                    android:textSize="13sp" />
+
+                <RadioGroup
+                    android:id="@+id/frameRate"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:layout_marginTop="2dp"
+                    android:orientation="horizontal">
+
+                    <RadioButton
+                        android:id="@+id/fps30"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:checked="true"
+                        android:text="30 FPS"
+                        android:textColor="@color/text" />
+
+                    <RadioButton
+                        android:id="@+id/fps20"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="20 FPS"
+                        android:textColor="@color/text" />
+
+                    <RadioButton
+                        android:id="@+id/fps15"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:text="15 FPS"
                         android:textColor="@color/text" />
                 </RadioGroup>
 

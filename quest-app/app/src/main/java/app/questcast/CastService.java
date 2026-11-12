@@ -64,11 +64,12 @@ public class CastService extends Service {
     static final String EXTRA_RESULT_DATA = "resultData";
     static final String EXTRA_SERVER = "server";
     static final String EXTRA_HEIGHT = "height";
+    static final String EXTRA_FPS = "fps";
 
     private static final String TAG = "QuestCast";
     private static final String CHANNEL_ID = "cast";
     private static final int NOTIFICATION_ID = 1;
-    private static final int FPS = 30;
+    private static final int MAX_FPS = 30;
     private static final int RETRY_SECONDS = 3;
     private static final int KEEPALIVE_SECONDS = 60;
 
@@ -124,6 +125,7 @@ public class CastService extends Service {
     private boolean stopped;   // worker thread
     private String server;
     private String code;
+    private int captureFps = MAX_FPS;
 
     private OkHttpClient http;
     private WebSocket socket;
@@ -153,6 +155,7 @@ public class CastService extends Service {
         server = intent.getStringExtra(EXTRA_SERVER);
         int height = intent.getIntExtra(EXTRA_HEIGHT, 720);
         int width = height * 16 / 9;
+        captureFps = Math.max(5, Math.min(MAX_FPS, intent.getIntExtra(EXTRA_FPS, MAX_FPS)));
 
         try {
             // Must be in the foreground, as a media-projection service, before capture starts.
@@ -217,7 +220,7 @@ public class CastService extends Service {
             }
         });
         capturer.initialize(surfaceHelper, getApplicationContext(), videoSource.getCapturerObserver());
-        capturer.startCapture(width, height, FPS);
+        capturer.startCapture(width, height, captureFps);
 
         videoTrack = factory.createVideoTrack("screen", videoSource);
     }
@@ -334,6 +337,9 @@ public class CastService extends Service {
         RtpSender sender;
         boolean answered;
         boolean connected;
+        // What this viewer asked for in its settings panel.
+        int fps = MAX_FPS;
+        double scale = 1.0;
 
         Peer(String id) {
             this.id = id;
@@ -428,7 +434,7 @@ public class CastService extends Service {
                         peer.answered = true;
                         for (IceCandidate c : peer.pendingCandidates) peer.pc.addIceCandidate(c);
                         peer.pendingCandidates.clear();
-                        tuneForScreenContent(peer.sender);
+                        tune(peer);
                     });
                 }
             }, new SessionDescription(SessionDescription.Type.ANSWER, sdp.getString("sdp")));
@@ -438,19 +444,29 @@ public class CastService extends Service {
                     c.optString("sdpMid", "0"), c.optInt("sdpMLineIndex", 0), c.getString("candidate"));
             if (peer.answered) peer.pc.addIceCandidate(candidate);
             else peer.pendingCandidates.add(candidate);
+        } else if (data.has("settings")) {
+            // A viewer asked for a lower frame rate or resolution; change only their stream.
+            JSONObject wanted = data.getJSONObject("settings");
+            peer.fps = (int) Math.max(5, Math.min(MAX_FPS, wanted.optDouble("fps", MAX_FPS)));
+            peer.scale = Math.max(1.0, Math.min(4.0, wanted.optDouble("scale", 1.0)));
+            if (peer.answered) tune(peer);
         }
     }
 
-    /** Keep the picture sharp enough to zoom into: allow a high bitrate and drop frames before pixels. */
-    private static void tuneForScreenContent(RtpSender sender) {
+    /**
+     * Keep the picture sharp enough to zoom into (high bitrate, drop frames before
+     * pixels), within the frame rate and resolution this viewer asked for.
+     */
+    private void tune(Peer peer) {
         try {
-            RtpParameters params = sender.getParameters();
+            RtpParameters params = peer.sender.getParameters();
             for (RtpParameters.Encoding encoding : params.encodings) {
                 encoding.maxBitrateBps = 8_000_000;
-                encoding.maxFramerate = FPS;
+                encoding.maxFramerate = Math.min(peer.fps, captureFps);
+                encoding.scaleResolutionDownBy = peer.scale;
             }
             params.degradationPreference = RtpParameters.DegradationPreference.MAINTAIN_RESOLUTION;
-            sender.setParameters(params);
+            peer.sender.setParameters(params);
         } catch (RuntimeException e) {
             Log.w(TAG, "could not tune sender", e);
         }

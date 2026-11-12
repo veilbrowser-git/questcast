@@ -14,8 +14,8 @@ android {
         applicationId 'app.questcast'
         minSdk 29
         targetSdk 34
-        versionCode 1
-        versionName '1.0'
+        versionCode 2
+        versionName '1.1'
         buildConfigField 'String', 'DEFAULT_SERVER', "\"${defaultServer}\""
         ndk {
             // Every Quest is 64-bit ARM; skipping other ABIs keeps the APK small.
