@@ -70,6 +70,7 @@ public class CastService extends Service {
     private static final int NOTIFICATION_ID = 1;
     private static final int FPS = 30;
     private static final int RETRY_SECONDS = 3;
+    private static final int KEEPALIVE_SECONDS = 60;
 
     // ---------- State shared with the activity ----------
 
@@ -239,6 +240,7 @@ public class CastService extends Service {
             @Override
             public void onOpen(WebSocket ws, Response response) {
                 ws.send("{\"type\":\"host\"}");
+                scheduleKeepalive(ws);
             }
 
             @Override
@@ -257,6 +259,19 @@ public class CastService extends Service {
                 run(() -> onSocketLost(ws));
             }
         });
+    }
+
+    /** Regular traffic keeps a free hosted relay from going to sleep mid-cast. */
+    private void scheduleKeepalive(WebSocket ws) {
+        try {
+            worker.schedule(() -> {
+                if (stopped || ws != socket) return;
+                ws.send("{\"type\":\"keepalive\"}");
+                scheduleKeepalive(ws);
+            }, KEEPALIVE_SECONDS, TimeUnit.SECONDS);
+        } catch (RejectedExecutionException ignored) {
+            // The service is already gone.
+        }
     }
 
     private void onSocketLost(WebSocket ws) {

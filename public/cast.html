@@ -41,7 +41,7 @@
   const $ = (id) => document.getElementById(id);
   const ICE = [{ urls: ['stun:stun.l.google.com:19302', 'stun:stun.cloudflare.com:3478'] }];
 
-  let ws = null, stream = null;
+  let ws = null, stream = null, keepalive = 0;
   const peers = new Map(); // viewerId -> RTCPeerConnection
 
   if (!navigator.mediaDevices?.getDisplayMedia) {
@@ -70,7 +70,14 @@
 
   function connect() {
     const sock = ws = new WebSocket(questcastSocketUrl());
-    sock.onopen = () => sock.send(JSON.stringify({ type: 'host' }));
+    sock.onopen = () => {
+      sock.send(JSON.stringify({ type: 'host' }));
+      // Regular traffic keeps a free hosted relay from going to sleep mid-cast.
+      clearInterval(keepalive);
+      keepalive = setInterval(() => {
+        if (sock.readyState === WebSocket.OPEN) sock.send('{"type":"keepalive"}');
+      }, 60_000);
+    };
 
     sock.onmessage = async (ev) => {
       if (sock !== ws) return;
@@ -134,6 +141,7 @@
   }
 
   function stop(message) {
+    clearInterval(keepalive);
     if (ws) { const s = ws; ws = null; s.close(); }
     for (const pc of peers.values()) pc.close();
     peers.clear();

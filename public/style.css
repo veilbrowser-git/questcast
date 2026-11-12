@@ -101,6 +101,7 @@ a { color: var(--accent); }
 .btn.danger { color: #fff; background: #c93a4b; }
 
 .error { min-height: 22px; margin: 12px 0 0; font-size: 14px; color: var(--danger); }
+.error.info { color: var(--muted); }
 
 .big-code {
   margin: 8px 0 4px;

@@ -1,0 +1,11 @@
+# One-click hosting for the relay on Render's free plan:
+# https://render.com/deploy?repo=https://github.com/veilbrowser-git/questcast
+services:
+  - type: web
+    name: questcast
+    runtime: node
+    plan: free
+    buildCommand: npm install
+    startCommand: npm start
+    healthCheckPath: /healthz
+    autoDeployTrigger: commit

@@ -180,6 +180,15 @@
   let ws = null, pc = null, code = '';
   let pendingCandidates = [];
   let signalQueue = Promise.resolve();
+  let retryTimer = 0;
+
+  // A free hosted relay sleeps when idle and needs up to a minute to wake.
+  const WAKE_WINDOW_MS = 75_000;
+
+  function setJoinNote(text, isError) {
+    joinError.textContent = text || '';
+    joinError.classList.toggle('info', !isError);
+  }
 
   // ---------- Code entry ----------
 
@@ -189,7 +198,8 @@
     const d = digits(codeInput.value);
     codeInput.value = d.length > 3 ? d.slice(0, 3) + ' ' + d.slice(3) : d;
     joinBtn.disabled = d.length !== 6;
-    joinError.textContent = '';
+    clearTimeout(retryTimer);
+    setJoinNote('', true);
   });
 
   $('joinForm').addEventListener('submit', (e) => {
@@ -213,11 +223,11 @@
     wake();
   }
 
-  function join(newCode) {
+  function join(newCode, wakeUntil = 0) {
     code = newCode;
     cleanup();
     joinBtn.disabled = true;
-    joinError.textContent = '';
+    setJoinNote(wakeUntil ? 'Waking up the cast relay. This can take a minute…' : 'Connecting…', false);
 
     const sock = ws = new WebSocket(questcastSocketUrl());
     let joined = false;
@@ -229,6 +239,7 @@
       const msg = JSON.parse(ev.data);
       if (msg.type === 'joined') {
         joined = true;
+        setJoinNote('', true);
         history.replaceState(null, '', '#' + code);
         enter.hidden = true;
         stage.hidden = false;
@@ -250,6 +261,12 @@
       if (sock !== ws) return;
       ws = null;
       if (!joined) {
+        const until = wakeUntil || (window.QUESTCAST_SERVER ? Date.now() + WAKE_WINDOW_MS : 0);
+        if (Date.now() < until) {
+          setJoinNote('Waking up the cast relay. This can take a minute…', false);
+          retryTimer = setTimeout(() => join(code, until), 3000);
+          return;
+        }
         backToEntry(questcastNeedsServer()
           ? "This site isn't connected to a cast relay yet. Set one in config.js."
           : "Can't reach the cast server. Check your connection.");
@@ -273,13 +290,14 @@
     history.replaceState(null, '', location.pathname + location.search);
     stage.hidden = true;
     enter.hidden = false;
-    joinError.textContent = message || '';
+    setJoinNote(message, true);
     joinBtn.disabled = digits(codeInput.value).length !== 6;
     codeInput.focus();
     codeInput.select();
   }
 
   function cleanup() {
+    clearTimeout(retryTimer);
     if (ws) { const s = ws; ws = null; try { s.send(JSON.stringify({ type: 'leave' })); } catch {} s.close(); }
     if (pc) { pc.ontrack = pc.onicecandidate = pc.onconnectionstatechange = null; pc.close(); pc = null; }
     pendingCandidates = [];
@@ -491,11 +509,15 @@
   });
 
   // A link like /#123456 joins straight away.
-  const fromHash = digits(location.hash);
-  if (fromHash.length === 6) {
-    codeInput.value = fromHash.slice(0, 3) + ' ' + fromHash.slice(3);
-    join(fromHash);
+  function joinFromHash() {
+    const fromHash = digits(location.hash);
+    if (fromHash.length === 6 && fromHash !== code) {
+      codeInput.value = fromHash.slice(0, 3) + ' ' + fromHash.slice(3);
+      join(fromHash);
+    }
   }
+  window.addEventListener('hashchange', joinFromHash);
+  joinFromHash();
 })();
 </script>
 </body>
