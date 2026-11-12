@@ -179,6 +179,7 @@
     <div class="error" id="joinError" role="alert"></div>
     <p class="small">Want to share a screen instead? <a href="cast.html">Start a cast</a></p>
   </form>
+  <aside id="adEntry" class="ad-slot" aria-label="Advertisement" hidden></aside>
 </main>
 
 <div id="stage" hidden>
@@ -664,6 +665,40 @@
     }
     updateBadge();
   }, 1000);
+
+  // ---------- Ads ----------
+  // One AdSense unit under the code box. It lives on the entry page only, so
+  // it is never on screen while a cast is playing.
+  (() => {
+    const ads = window.QUESTCAST_ADS || {};
+    const box = $('adEntry');
+    if (ads.client && ads.entrySlot) {
+      const script = document.createElement('script');
+      script.async = true;
+      script.crossOrigin = 'anonymous';
+      script.src = 'https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js?client=' + encodeURIComponent(ads.client);
+      document.head.appendChild(script);
+
+      const label = document.createElement('span');
+      label.className = 'ad-label';
+      label.textContent = 'Advertisement';
+      const unit = document.createElement('ins');
+      unit.className = 'adsbygoogle';
+      unit.style.display = 'block';
+      unit.dataset.adClient = ads.client;
+      unit.dataset.adSlot = ads.entrySlot;
+      unit.dataset.adFormat = 'auto';
+      unit.dataset.fullWidthResponsive = 'true';
+      box.append(label, unit);
+      box.hidden = false;
+      (window.adsbygoogle = window.adsbygoogle || []).push({});
+    } else if (new URLSearchParams(location.search).get('ads') === 'preview') {
+      // ?ads=preview shows where the ad will sit before an AdSense account exists.
+      box.classList.add('ad-placeholder');
+      box.textContent = 'Advertisement — your AdSense ad will appear here';
+      box.hidden = false;
+    }
+  })();
 
   // A link like /#123456 joins straight away.
   function joinFromHash() {

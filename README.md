@@ -57,6 +57,14 @@ video; fixing that needs a TURN server, which is not set up.
 To host your own relay instead, deploy this repo anywhere that runs Node with
 HTTPS and change `HOSTED_RELAY` in `public/config.js`.
 
+## Ads
+
+The watch page has one ad space under the code box, for Google AdSense. It is
+empty until `QUESTCAST_ADS` in `public/config.js` is filled in with the
+publisher ID and ad-unit slot from an approved AdSense account. Add
+`?ads=preview` to the address to see where it sits. Ads are never shown over
+the video.
+
 ## Build the headset app
 
 Needs a JDK 17 and the Android SDK (Android Studio works; so does the SDK that
