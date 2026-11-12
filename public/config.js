@@ -1,8 +1,10 @@
-// Where the QuestCast signaling server lives.
-// Leave empty when these pages are served by server.js itself.
-// When the pages are hosted somewhere static (e.g. GitHub Pages), set this to
-// the server's address, for example: 'https://questcast.example.com'
-window.QUESTCAST_SERVER = '';
+// Where the QuestCast relay lives.
+// Pages served by server.js itself (at home, or on the relay's own address)
+// talk to that same server. Pages on a static host such as GitHub Pages
+// can't run a relay, so they use the hosted one.
+const HOSTED_RELAY = 'https://questcast.onrender.com';
+
+window.QUESTCAST_SERVER = location.hostname.endsWith('.github.io') ? HOSTED_RELAY : '';
 
 // True when the pages are on a static host and no relay has been configured.
 window.questcastNeedsServer = () =>

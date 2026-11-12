@@ -41,16 +41,19 @@ address on any device on the same Wi-Fi.
 
 ## Using it away from home
 
-Out of the box everything runs on one Wi-Fi network. To watch from anywhere,
-the relay has to be online with HTTPS. The repo includes a `render.yaml` for
-Render's free plan:
+The relay is hosted at **https://questcast.onrender.com** (Render free plan,
+set up from `render.yaml`), so casts work across networks:
 
-1. Open <https://render.com/deploy?repo=https://github.com/veilbrowser-git/questcast> and sign in.
-2. Deploy. Render gives the relay an address like `https://questcast-xxxx.onrender.com`.
-3. Enter that address in the headset app, and put it in `public/config.js` so the GitHub Pages site uses it.
+- Website: <https://veilbrowser-git.github.io/questcast/>
+- In the headset app, enter `questcast.onrender.com` as the cast server.
 
 A free relay sleeps after 15 idle minutes and takes about a minute to wake;
-the headset app and the website both wait for it.
+the headset app and the website both wait for it. Some strict networks
+(certain mobile carriers, offices, schools) block direct device-to-device
+video; fixing that needs a TURN server, which is not set up.
+
+To host your own relay instead, deploy this repo anywhere that runs Node with
+HTTPS and change `HOSTED_RELAY` in `public/config.js`.
 
 ## Build the headset app
 
